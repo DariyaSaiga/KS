@@ -1,0 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inder&display=swap');
+
+.logo{
+    color: transparent;
+    -webkit-text-stroke: 1px #FFFF;
+}
+.text-inder{
+    font-family: 'Inder', sans-serif;
+}
