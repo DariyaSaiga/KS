@@ -140,7 +140,7 @@ export default function Filter() {
         <div className="flex items-center justify-between bg-[#272727] rounded-xl p-4">
           <div>
             <p className="text-white text-2xl">Hide completed</p>
-            <p className="text-gray-400 text-base">Hides routes you've topped or flashed</p>
+            <p className="text-gray-400 text-base">Hides routes you&apos;ve topped or flashed</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
             <input
