@@ -24,7 +24,7 @@ export default function Menu() {
     ];
 
     return(
-        <nav className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-[#001B3B] m-3 w-5/6 mx-auto flex justify-center rounded-xl p-2">
+        <nav className="fixed left-1/2 -translate-x-1/2 bg-[#001B3B] m-3 w-5/6 mx-auto flex justify-center rounded-xl p-2" style={{ bottom: "max(20px, env(safe-area-inset-bottom))" }}>
                 {links.map((link) => {
             const isActive = link.activePaths.includes(pathname)
               || !!((link as {activePrefix?: string}).activePrefix && pathname.startsWith((link as {activePrefix?: string}).activePrefix!));

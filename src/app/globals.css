@@ -50,12 +50,17 @@
   font-style: normal;
 }
 
-body {
-  font-family: 'MyFont', sans-serif;
+html {
+  min-height: 100%;
   background: linear-gradient(135deg, #000000 0%, #001B3B 100%);
   background-attachment: fixed;
-  background-size: cover;
+  background-color: #001B3B;
+}
+
+body {
+  font-family: 'MyFont', sans-serif;
   min-height: 100dvh;
+  background: transparent;
 }
 
 :root {

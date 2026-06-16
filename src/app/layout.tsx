@@ -9,7 +9,12 @@ import { FilterContextProvider } from "@/context/FilterContext";
 export const metadata: Metadata = {
   title: "KoSyachhnik PRO",
   description: "приложение для трекинга по скалолазанию",
-  manifest: '/manifest.json'
+  manifest: '/manifest.json',
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+  },
 };
 
 export default function RootLayout({
