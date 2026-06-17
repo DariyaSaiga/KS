@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLogContext } from "@/context/LogContext";
 import { IoChevronBack } from "react-icons/io5";
+import Menu from "@/components/Menu";
 import "@/app/home.css";
 
 const LEVELS = [
@@ -262,6 +263,7 @@ export default function EditRoute() {
           {saving ? "Saving..." : "Save changes"}
         </button>
       </main>
+      <Menu />
     </div>
   );
 }

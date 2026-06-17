@@ -1,10 +1,11 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Menu from "../../components/Menu";
 import SearchBar from "@/components/SearchBar";
-import { useLogContext } from "@/context/LogContext";
 import { useFilterContext, SortBy } from "@/context/FilterContext";
 import { motion } from "framer-motion";
+import { IoSettingsSharp } from "react-icons/io5";
 import "../home.css";
 
 const tap = { whileTap: { scale: 0.91 }, transition: { type: "spring" as const, stiffness: 400, damping: 18 } };
@@ -30,7 +31,6 @@ const PRESET_COLORS: { hex: string; name: string }[] = [
 
 export default function Filter() {
   const router = useRouter();
-  const { logout } = useLogContext();
   const {
     sortBy, levelFilter, colorFilter, hideCompleted,
     setSortBy, setLevelFilter, setColorFilter, setHideCompleted, resetFilters,
@@ -43,11 +43,10 @@ export default function Filter() {
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-tr from-black to-[#001B3B] bg-cover bg-fixed bg-center">
-      <header className="flex justify-between">
-        <button
-          onClick={logout}
-          className="m-1 px-3 rounded-md border border-white active:bg-[#272727]"
-        >Log out</button>
+      <header className="flex justify-between items-center">
+        <Link href="/settings" className="m-1 p-2 rounded-full active:bg-white/10 flex items-center">
+          <IoSettingsSharp size={28} className="text-white" />
+        </Link>
         <h2 className="logo text-5xl m-1">KS</h2>
       </header>
 

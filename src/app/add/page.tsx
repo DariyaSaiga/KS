@@ -1,11 +1,13 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import Menu from "../../components/Menu";
 import PlusIcon from "../../../public/icons/Plus.svg";
 import NotIcon from "../../../public/icons/not.svg";
 import { useLogContext } from "@/context/LogContext";
-import { motion } from "framer-motion";
+import { IoSettingsSharp, IoPencil, IoCheckmark } from "react-icons/io5";
+import { motion, AnimatePresence } from "framer-motion";
 import "../home.css";
 
 const tapSpring = { whileTap: { scale: 0.91 as number }, transition: { type: "spring" as const, stiffness: 400, damping: 18 } };
@@ -24,12 +26,12 @@ function toolColor(tool: DrawingTool) {
   return "#FFFFFF";
 }
 
-function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, lw: number) {
   const { tool, x1, y1, x2, y2 } = stroke;
   const color = toolColor(tool);
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = lw;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
@@ -46,7 +48,7 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
     ctx.stroke();
   } else if (tool === "arrow") {
     const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-    const headLen = Math.max(18, dist * 0.2);
+    const headLen = Math.max(lw * 4, dist * 0.2);
     const angle = Math.atan2(y2 - y1, x2 - x1);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -59,6 +61,11 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
     ctx.closePath();
     ctx.fill();
   }
+}
+
+// lineWidth scaled to canvas resolution (~8px at 400px display width)
+function scaledLW(canvas: HTMLCanvasElement) {
+  return Math.max(6, canvas.width * 0.02);
 }
 
 export default function Add() {
@@ -78,6 +85,30 @@ export default function Add() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [drawingTool, setDrawingTool] = useState<DrawingTool>("circle-red");
   const activeRef = useRef<{ on: boolean; x1: number; y1: number }>({ on: false, x1: 0, y1: 0 });
+  const [showEditor, setShowEditor] = useState(false);
+  const canvasDataUrlRef = useRef<string | null>(null); // saved when editor closes
+
+  const closeEditor = useCallback(() => {
+    if (canvasRef.current) {
+      canvasDataUrlRef.current = canvasRef.current.toDataURL("image/jpeg", 0.95);
+    }
+    setShowEditor(false);
+  }, []);
+
+  // Callback ref — re-draws when canvas mounts (e.g. editor opens)
+  const setCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+    canvasRef.current = node;
+    if (node && loadedImageRef.current) {
+      const img = loadedImageRef.current;
+      node.width = img.naturalWidth;
+      node.height = img.naturalHeight;
+      const ctx = node.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        strokesRef.current.forEach((s) => drawStroke(ctx, s, scaledLW(node)));
+      }
+    }
+  }, []);
 
   const redrawCanvas = useCallback((extra?: Stroke) => {
     const canvas = canvasRef.current;
@@ -88,7 +119,7 @@ export default function Add() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     const all = extra ? [...strokesRef.current, extra] : strokesRef.current;
-    all.forEach((s) => drawStroke(ctx, s));
+    all.forEach((s) => drawStroke(ctx, s, scaledLW(canvas)));
   }, []);
 
   useEffect(() => {
@@ -183,6 +214,7 @@ export default function Add() {
     setSelectedFile(null);
     setStrokes([]);
     strokesRef.current = [];
+    canvasDataUrlRef.current = null;
   };
 
   const handleAddRoute = async () => {
@@ -192,12 +224,16 @@ export default function Add() {
     }
     setUploading(true);
     try {
-      // Export canvas (photo + drawings) as blob
-      const canvas = canvasRef.current;
+      // Use saved canvas data URL (from when editor was closed) or original file
       let fileToUpload = selectedFile!;
-      if (canvas) {
+      const dataUrl = canvasDataUrlRef.current;
+      if (dataUrl) {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        fileToUpload = new File([blob], `route_${Date.now()}.jpg`, { type: "image/jpeg" });
+      } else if (canvasRef.current) {
         fileToUpload = await new Promise<File>((resolve, reject) => {
-          canvas.toBlob(
+          canvasRef.current!.toBlob(
             (blob) => blob
               ? resolve(new File([blob], `route_${Date.now()}.jpg`, { type: "image/jpeg" }))
               : reject(new Error("Canvas пустой")),
@@ -221,7 +257,7 @@ export default function Add() {
 
       alert("Трасса успешно добавлена!");
       setName(""); setLevel(""); setDescription(""); setColor("#ff0000");
-      setFilePreview(null); setSelectedFile(null); setStrokes([]); strokesRef.current = [];
+      setFilePreview(null); setSelectedFile(null); setStrokes([]); strokesRef.current = []; canvasDataUrlRef.current = null;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Неизвестная ошибка";
       alert(`Ошибка: ${msg}`);
@@ -242,7 +278,10 @@ export default function Add() {
 
   return (
     <div className="w-full h-screen bg-gradient-to-tr from-black to-[#001B3B] flex flex-col">
-      <header className="flex justify-end">
+      <header className="flex justify-between items-center">
+        <Link href="/settings" className="m-1 p-2 rounded-full active:bg-white/10 flex items-center">
+          <IoSettingsSharp size={28} className="text-white" />
+        </Link>
         <h2 className="logo text-5xl m-1">KS</h2>
       </header>
 
@@ -333,81 +372,123 @@ export default function Add() {
           />
         </div>
 
-        {/* Photo button */}
-        <div className="flex justify-center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,image/heic"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <motion.button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            whileTap={{ scale: 0.95 }}
+        {/* Photo section */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,image/heic"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {!filePreview ? (
+          <div className="flex justify-center">
+            <motion.button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 18 }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#003676] text-white rounded-md"
+            >
+              <PlusIcon />
+              <p className="text-xl">Add photo of route</p>
+            </motion.button>
+          </div>
+        ) : (
+          /* Small thumbnail — tap to open editor */
+          <motion.div
+            className="relative rounded-xl overflow-hidden"
+            style={{ height: 140 }}
+            whileTap={{ scale: 0.98 }}
             transition={{ type: "spring", stiffness: 400, damping: 18 }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#003676] text-white rounded-md"
+            onClick={() => setShowEditor(true)}
           >
-            <PlusIcon />
-            <p className="text-xl">Add photo of route</p>
-          </motion.button>
-        </div>
-
-        {/* Canvas editor */}
-        {filePreview && (
-          <>
-            <div className="relative">
-              <canvas
-                ref={canvasRef}
-                className="w-full rounded-md"
-                style={{ touchAction: "none" }}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={(e) => { if (activeRef.current.on) onMouseUp(e); }}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-              />
-              <button
-                onClick={removeImage}
-                className="absolute top-2 right-2 bg-red-500 rounded-md flex items-center justify-center"
-              >
-                <NotIcon className="w-6 h-6 transform scale-75 m-1 mr-[2px]" />
-              </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={filePreview} alt="route" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-2">
+              <IoPencil size={22} className="text-white" />
+              <span className="text-white text-xl">
+                {strokes.length > 0 ? `Edit (${strokes.length})` : "Edit photo"}
+              </span>
             </div>
-
-            {/* Drawing toolbar */}
-            <div className="flex items-center justify-center gap-3">
-              {tools.map((t) => (
-                <motion.button
-                  key={t.id}
-                  onClick={() => setDrawingTool(t.id)}
-                  whileTap={{ scale: 0.88 }}
-                  animate={{ scale: drawingTool === t.id ? 1.1 : 1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 18 }}
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border-2 ${
-                    drawingTool === t.id ? "border-white bg-[#003676]" : "border-white/30 bg-[#272727]"
-                  }`}
-                  style={{ color: toolColor(t.id) }}
-                >
-                  {t.label}
-                </motion.button>
-              ))}
-              <motion.button
-                onClick={() => setStrokes((p) => p.slice(0, -1))}
-                disabled={strokes.length === 0}
-                whileTap={{ scale: 0.88 }}
-                transition={{ type: "spring", stiffness: 400, damping: 18 }}
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-xl bg-[#272727] border-2 border-white/30 disabled:opacity-30"
-                title="Отменить"
-              >
-                ↩
-              </motion.button>
-            </div>
-          </>
+            <motion.button
+              onClick={(e) => { e.stopPropagation(); removeImage(); }}
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: "spring", stiffness: 400, damping: 18 }}
+              className="absolute top-2 right-2 bg-red-500/80 rounded-full p-1"
+            >
+              <NotIcon className="w-5 h-5 transform scale-75" />
+            </motion.button>
+          </motion.div>
         )}
+
+        {/* Fullscreen canvas editor overlay */}
+        <AnimatePresence>
+          {showEditor && filePreview && (
+            <motion.div
+              className="fixed inset-0 z-50 bg-black flex flex-col"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
+            >
+              {/* Toolbar top */}
+              <div className="flex justify-between items-center px-4 py-3 bg-black/80">
+                <div className="flex items-center gap-3">
+                  {tools.map((t) => (
+                    <motion.button
+                      key={t.id}
+                      onClick={() => setDrawingTool(t.id)}
+                      whileTap={{ scale: 0.88 }}
+                      animate={{ scale: drawingTool === t.id ? 1.15 : 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center text-2xl border-2 ${
+                        drawingTool === t.id ? "border-white bg-[#003676]" : "border-white/30 bg-[#272727]"
+                      }`}
+                      style={{ color: toolColor(t.id) }}
+                    >
+                      {t.label}
+                    </motion.button>
+                  ))}
+                  <motion.button
+                    onClick={() => setStrokes((p) => p.slice(0, -1))}
+                    disabled={strokes.length === 0}
+                    whileTap={{ scale: 0.88 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                    className="w-11 h-11 rounded-xl flex items-center justify-center text-xl bg-[#272727] border-2 border-white/30 disabled:opacity-30"
+                  >
+                    ↩
+                  </motion.button>
+                </div>
+                <motion.button
+                  onClick={closeEditor}
+                  whileTap={{ scale: 0.92 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 18 }}
+                  className="flex items-center gap-1 bg-[#003676] px-4 py-2 rounded-xl text-white text-xl"
+                >
+                  <IoCheckmark size={20} />
+                  Done
+                </motion.button>
+              </div>
+
+              {/* Canvas */}
+              <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+                <canvas
+                  ref={setCanvasRef}
+                  className="max-w-full max-h-full"
+                  style={{ touchAction: "none" }}
+                  onMouseDown={onMouseDown}
+                  onMouseMove={onMouseMove}
+                  onMouseUp={onMouseUp}
+                  onMouseLeave={(e) => { if (activeRef.current.on) onMouseUp(e); }}
+                  onTouchStart={onTouchStart}
+                  onTouchMove={onTouchMove}
+                  onTouchEnd={onTouchEnd}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <motion.button
           onClick={handleAddRoute}
